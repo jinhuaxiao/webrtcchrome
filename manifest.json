@@ -16,12 +16,20 @@
       "_execute_action": {
       }
    },
-   "content_scripts": [ {
-      "all_frames": true,
-      "js": [ "data/content_script/inject.js" ],
-      "matches": [ "*://*/*" ],
-      "run_at": "document_start"
-   } ],
+   "content_scripts": [ 
+      {
+         "all_frames": true,
+         "js": [ "data/content_script/inject.js" ],
+         "matches": [ "*://*/*" ],
+         "run_at": "document_start"
+      },
+      {
+         "all_frames": false,
+         "js": [ "data/content_script/timezone_listener.js" ],
+         "matches": [ "*://*/*" ],
+         "run_at": "document_start"
+      }
+   ],
    "description": "Have control over WebRTC (disable | enable) and protect your IP address.",
    "homepage_url": "https://mybrowseraddon.com/webrtc-control.html",
    "icons": {

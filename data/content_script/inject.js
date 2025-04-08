@@ -80,9 +80,17 @@ var config = {
         script.d = document.getElementById("webrtc-control-d");
         /*  */
         if (!script.d) {
+          // 首先获取时区并存储到本地存储
+          const timezone = e.timezone || "America/Los_Angeles";
+          chrome.storage.local.set({
+            timezone: timezone
+          }, function() {
+            console.log('[WebRTC Control] 已保存时区设置到存储:', timezone);
+          });
+          
           // 注入时区设置到全局变量
           const tzScript = document.createElement("script");
-          tzScript.textContent = `window.__WEBRTC_CONTROL_TIMEZONE__ = "${e.timezone || 'auto'}";`;
+          tzScript.textContent = `window.__WEBRTC_CONTROL_TIMEZONE__ = "${timezone}";`;
           document.documentElement.appendChild(tzScript);
           tzScript.remove();
           
@@ -95,14 +103,19 @@ var config = {
           /*  */
           document.documentElement.appendChild(script.d);
         } else if (e.timezone) {
-          // 如果时区已更改，更新现有设置
+          // 如果时区已更改，更新现有设置并保存到存储
+          chrome.storage.local.set({
+            timezone: e.timezone
+          }, function() {
+            console.log('[WebRTC Control] 已更新时区设置到存储:', e.timezone);
+          });
+          
+          // 更新页面中的时区设置
           const updateScript = document.createElement("script");
           updateScript.textContent = `
-            if (window.updateWebRTCTimezone) {
-              window.updateWebRTCTimezone("${e.timezone}");
-            } else {
-              window.__WEBRTC_CONTROL_TIMEZONE__ = "${e.timezone}";
-            }
+            window.__WEBRTC_CONTROL_TIMEZONE__ = "${e.timezone}";
+            // 触发自定义事件通知时区脚本更新
+            document.dispatchEvent(new CustomEvent('webrtc-control-timezone-update'));
           `;
           document.documentElement.appendChild(updateScript);
           updateScript.remove();
@@ -111,6 +124,33 @@ var config = {
     }
   }
 };
+
+// 监听来自popup的时区更新消息
+chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
+  if (request.action === 'updateTimezone' && request.timezone) {
+    // 保存时区设置到存储
+    chrome.storage.local.set({
+      timezone: request.timezone
+    }, function() {
+      console.log('[WebRTC Control] 已保存时区设置到存储:', request.timezone);
+    });
+    
+    // 更新页面中的时区设置
+    const updateScript = document.createElement("script");
+    updateScript.textContent = `
+      window.__WEBRTC_CONTROL_TIMEZONE__ = "${request.timezone}";
+      // 触发自定义事件通知时区脚本更新
+      document.dispatchEvent(new CustomEvent('webrtc-control-timezone-update'));
+    `;
+    document.documentElement.appendChild(updateScript);
+    updateScript.remove();
+    
+    // 响应成功消息
+    if (sendResponse) {
+      sendResponse({success: true});
+    }
+  }
+});
 
 background.send("load");
 background.receive("storage", config.update);

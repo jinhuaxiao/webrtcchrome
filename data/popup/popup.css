@@ -162,6 +162,37 @@ select {
   border-top: 1px solid #f0f0f0;
 }
 
+/* 时区检测区域样式 */
+.timezone-detection {
+  margin-top: 10px;
+  padding: 10px;
+  background-color: #f5f5f5;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.timezone-detection div {
+  margin-bottom: 4px;
+}
+
+.timezone-detection button {
+  padding: 4px 8px;
+  font-size: 11px;
+  margin-top: 4px;
+  background-color: #2196F3;
+}
+
+#timezone-status-text.success {
+  color: #4CAF50;
+  font-weight: bold;
+}
+
+#timezone-status-text.failed {
+  color: #f44336;
+  font-weight: bold;
+}
+
 .buttons {
   display: flex;
   justify-content: space-between;
