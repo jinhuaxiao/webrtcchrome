@@ -1,7 +1,7 @@
 // 监听来自popup或background的消息
 chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
   if (message.action === 'updateTimezone') {
-    console.log('[WebRTC Control] 收到时区更新请求:', message.timezone);
+    console.log('[WebRTC Control] 收到时区更新请求(timezone_listener):', message.timezone);
     
     // 向页面注入时区设置
     injectTimezoneToPage(message.timezone);
@@ -36,6 +36,7 @@ chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
 
 // 向页面注入时区设置
 function injectTimezoneToPage(timezone) {
+  console.log('[WebRTC Control] 注入时区到页面:', timezone);
   const script = document.createElement('script');
   script.textContent = `
     window.__WEBRTC_CONTROL_TIMEZONE__ = "${timezone}";
@@ -47,11 +48,13 @@ function injectTimezoneToPage(timezone) {
 
 // 注入刷新命令，让时区欺骗脚本重新应用设置
 function injectRefreshCommand() {
+  console.log('[WebRTC Control] 注入刷新命令');
   const script = document.createElement('script');
   script.textContent = `
     try {
       // 触发自定义事件以刷新时区设置
       document.dispatchEvent(new CustomEvent('webrtc-control-timezone-update'));
+      console.log("[WebRTC Control] 已触发时区更新事件");
     } catch(e) {
       console.error("[WebRTC Control] 触发刷新事件失败:", e);
     }
@@ -62,9 +65,12 @@ function injectRefreshCommand() {
 
 // 强制重新注入时区欺骗脚本
 function reInjectTimezoneSpoof(timezone) {
+  console.log('[WebRTC Control] 重新注入时区欺骗脚本');
+  
   // 先尝试移除旧脚本
   const oldScript = document.getElementById("webrtc-control-d");
   if (oldScript) {
+    console.log('[WebRTC Control] 移除旧的时区欺骗脚本');
     oldScript.remove();
   }
   
@@ -81,6 +87,8 @@ function reInjectTimezoneSpoof(timezone) {
 
 // 检测页面实际时区
 function detectPageTimezone(callback) {
+  console.log('[WebRTC Control] 开始检测页面时区');
+  
   // 创建一个临时ID，用于接收检测结果
   const detectionId = 'timezone-detection-' + Date.now();
   
@@ -97,6 +105,12 @@ function detectPageTimezone(callback) {
         
         // 目标时区 (从window变量获取)
         const targetTimezone = window.__WEBRTC_CONTROL_TIMEZONE__ || "America/Los_Angeles";
+        
+        console.log("[WebRTC Control] 页面时区检测:", {
+          currentTimezone: currentTimezone,
+          dateString: dateString,
+          targetTimezone: targetTimezone
+        });
         
         // 将结果保存到一个临时元素
         const result = {
@@ -139,6 +153,7 @@ function detectPageTimezone(callback) {
         }
         
         result.success = success;
+        console.log("[WebRTC Control] 时区检测结果:", success ? "成功" : "失败");
         
         // 将结果保存到一个临时元素
         const resultElement = document.createElement('div');
@@ -148,6 +163,7 @@ function detectPageTimezone(callback) {
         document.body.appendChild(resultElement);
       } catch (e) {
         // 出错时保存错误信息
+        console.error("[WebRTC Control] 时区检测错误:", e);
         const errorResult = {
           success: false,
           message: e.message,
@@ -172,6 +188,7 @@ function detectPageTimezone(callback) {
       try {
         const resultData = JSON.parse(resultElement.getAttribute('data-result'));
         resultElement.remove();
+        console.log('[WebRTC Control] 获取到时区检测结果:', resultData);
         if (callback) {
           callback(resultData);
         }
@@ -186,6 +203,7 @@ function detectPageTimezone(callback) {
         }
       }
     } else {
+      console.error('[WebRTC Control] 未找到时区检测结果元素');
       if (callback) {
         callback({
           success: false,
@@ -194,7 +212,7 @@ function detectPageTimezone(callback) {
         });
       }
     }
-  }, 500); // 增加延迟时间
+  }, 1000); // 增加延迟时间，确保脚本有足够时间执行
 }
 
 // 初始化时，从存储中获取当前时区设置并注入
@@ -208,11 +226,65 @@ chrome.storage.local.get(['timezone', 'timezoneSpoof'], function(result) {
     // 向页面注入时区设置
     injectTimezoneToPage(timezone);
     
+    // 注入刷新命令
+    injectRefreshCommand();
+    
+    // 强制重新注入时区欺骗脚本
+    reInjectTimezoneSpoof(timezone);
+    
     // 如果时区未保存，保存默认时区到存储
     if (!result.timezone) {
       chrome.storage.local.set({
         timezone: 'America/Los_Angeles'
       });
     }
+    
+    // 在页面完全加载后，再次确认时区设置正确应用
+    window.addEventListener('load', function() {
+      setTimeout(function() {
+        console.log('[WebRTC Control] 页面加载完成后确认时区设置');
+        injectTimezoneToPage(timezone);
+        injectRefreshCommand();
+        
+        // 检测时区是否已正确应用
+        detectPageTimezone(function(result) {
+          console.log('[WebRTC Control] 页面加载后时区检测结果:', result);
+          if (!result.success) {
+            console.log('[WebRTC Control] 时区设置未正确应用，尝试重新注入');
+            reInjectTimezoneSpoof(timezone);
+          }
+        });
+      }, 1000); // 延迟1秒执行，确保页面已完全加载
+    });
   }
-}); 
+});
+
+// 添加一个消息发送和接收测试函数，帮助诊断
+function testMessagePassing() {
+  console.log('[WebRTC Control] 测试消息传递系统...');
+  
+  // 向background脚本发送测试消息
+  chrome.runtime.sendMessage({
+    method: 'test-message',
+    data: { message: 'Test from timezone_listener.js' },
+    path: 'content-to-background'
+  }, function(response) {
+    console.log('[WebRTC Control] 收到background响应:', response || '无响应');
+  });
+}
+
+// 在初始化后执行消息测试
+setTimeout(testMessagePassing, 2000);
+
+// 向页面抛出一个全局事件，允许页面内代码检查是否成功注入
+const readyEvent = document.createElement('script');
+readyEvent.textContent = `
+  window.dispatchEvent(new CustomEvent('webrtc-control-ready', { 
+    detail: { 
+      timezone: window.__WEBRTC_CONTROL_TIMEZONE__ || 'unknown' 
+    } 
+  }));
+  console.log("[WebRTC Control] 注入脚本就绪事件已触发");
+`;
+document.documentElement.appendChild(readyEvent);
+readyEvent.remove(); 

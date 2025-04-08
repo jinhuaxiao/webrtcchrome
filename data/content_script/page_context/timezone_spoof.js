@@ -2,16 +2,22 @@
   try {
     console.log("[WebRTC Control] 开始初始化时区欺骗...");
     
-    // 从window变量获取时区设置
+    // 先尝试从window变量获取时区设置，如果没有，则使用默认值
     let TARGET_TIMEZONE = window.__WEBRTC_CONTROL_TIMEZONE__ || "America/Los_Angeles";
-    console.log("[WebRTC Control] 使用时区设置:", TARGET_TIMEZONE);
+    console.log("[WebRTC Control] 初始时区设置:", TARGET_TIMEZONE);
     
     // 监听自定义事件，用于实时更新时区
-    document.addEventListener('webrtc-control-timezone-update', function() {
+    document.addEventListener('webrtc-control-timezone-update', function(event) {
       console.log("[WebRTC Control] 收到时区更新事件");
-      TARGET_TIMEZONE = window.__WEBRTC_CONTROL_TIMEZONE__ || TARGET_TIMEZONE;
-      console.log("[WebRTC Control] 使用新的时区设置:", TARGET_TIMEZONE);
-      applyTimezoneSpoof(TARGET_TIMEZONE);
+      const newTimezone = window.__WEBRTC_CONTROL_TIMEZONE__ || TARGET_TIMEZONE;
+      console.log("[WebRTC Control] 收到新的时区设置:", newTimezone);
+      if (newTimezone !== TARGET_TIMEZONE) {
+        TARGET_TIMEZONE = newTimezone;
+        console.log("[WebRTC Control] 使用新的时区设置:", TARGET_TIMEZONE);
+        applyTimezoneSpoof(TARGET_TIMEZONE);
+      } else {
+        console.log("[WebRTC Control] 时区设置未变化，仍为:", TARGET_TIMEZONE);
+      }
     });
     
     // 监听window变量变化
@@ -21,15 +27,37 @@
       },
       set: function(newValue) {
         console.log("[WebRTC Control] 时区变量被设置为:", newValue);
-        TARGET_TIMEZONE = newValue;
-        // 延迟执行时区更新，确保设置生效
-        setTimeout(function() {
-          applyTimezoneSpoof(TARGET_TIMEZONE);
-        }, 0);
+        if (newValue !== TARGET_TIMEZONE) {
+          TARGET_TIMEZONE = newValue;
+          // 延迟执行时区更新，确保设置生效
+          setTimeout(function() {
+            console.log("[WebRTC Control] 应用新的时区设置:", TARGET_TIMEZONE);
+            applyTimezoneSpoof(TARGET_TIMEZONE);
+          }, 0);
+        } else {
+          console.log("[WebRTC Control] 时区变量值未变化，仍为:", TARGET_TIMEZONE);
+        }
         return newValue;
       },
       configurable: true
     });
+    
+    // 注册全局变量以便调试和检测
+    window.__WEBRTC_CONTROL_GET_TIMEZONE__ = function() {
+      return {
+        currentTimezone: TARGET_TIMEZONE,
+        dateString: new Date().toString(),
+        intlTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      };
+    };
+    
+    // 立刻触发一个自定义事件通知系统时区脚本已加载
+    // 这样其他脚本可以检测到时区脚本已加载
+    const loadEvent = new CustomEvent('webrtc-control-timezone-loaded', {
+      detail: { timezone: TARGET_TIMEZONE }
+    });
+    document.dispatchEvent(loadEvent);
+    console.log("[WebRTC Control] 已触发时区脚本加载事件");
     
     // 应用时区欺骗的主函数
     function applyTimezoneSpoof(timezone) {

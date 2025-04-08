@@ -28,23 +28,88 @@ var background = (function () {
   }
 })();
 
-// 检测页面实际时区
-function detectPageTimezone(callback) {
+// 检测页面实际时区，增加重试机制
+function detectPageTimezone(callback, retryCount = 0) {
+  const maxRetries = 2; // 最大重试次数
+  
+  console.log('[WebRTC Control] 检测页面时区，尝试次数:', retryCount + 1);
+  
+  // 更新状态文本
+  const statusText = document.getElementById('timezone-status-text');
+  statusText.textContent = `检测中...(${retryCount + 1}/${maxRetries + 1})`;
+  statusText.classList.remove('success', 'failed');
+  
   chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
     if (tabs[0]) {
+      // 通过background中转发送消息以确保接收
+      background.send("timezone-detect", {
+        tabId: tabs[0].id
+      });
+      
+      // 直接发送消息到content script
       chrome.tabs.sendMessage(tabs[0].id, {
         action: 'detectTimezone'
       }, function(response) {
-        if (callback && response) {
-          callback(response);
-        } else {
-          // 如果无法获取响应，显示错误
+        // 处理chrome.runtime.lastError
+        if (chrome.runtime.lastError) {
+          console.error('[WebRTC Control] 发送消息错误:', chrome.runtime.lastError);
+          
+          // 如果没有响应且未达到最大重试次数，则重试
+          if (retryCount < maxRetries) {
+            setTimeout(function() {
+              detectPageTimezone(callback, retryCount + 1);
+            }, 1000);
+            return;
+          }
+          
+          // 达到最大重试次数，报告错误
           updateTimezoneStatusUI({
             success: false,
-            message: '无法检测页面时区',
+            message: `消息传递失败: ${chrome.runtime.lastError.message}`,
             currentTimezone: '检测失败',
             targetTimezone: document.getElementById('timezone-select').value || 'auto'
           });
+          
+          // 显示刷新按钮
+          showRefreshButton();
+          
+          if (callback) callback({success: false});
+          return;
+        }
+        
+        if (response) {
+          if (callback) {
+            callback(response);
+          }
+          
+          // 更新UI
+          updateTimezoneStatusUI(response);
+          
+          // 如果检测失败，显示刷新按钮
+          if (!response.success) {
+            showRefreshButton();
+          }
+        } else {
+          // 如果没有响应且未达到最大重试次数，则重试
+          if (retryCount < maxRetries) {
+            setTimeout(function() {
+              detectPageTimezone(callback, retryCount + 1);
+            }, 1000);
+            return;
+          }
+          
+          // 达到最大重试次数，报告错误
+          updateTimezoneStatusUI({
+            success: false,
+            message: '无法接收时区检测响应',
+            currentTimezone: '检测失败',
+            targetTimezone: document.getElementById('timezone-select').value || 'auto'
+          });
+          
+          // 显示刷新按钮
+          showRefreshButton();
+          
+          if (callback) callback({success: false});
         }
       });
     } else {
@@ -53,6 +118,96 @@ function detectPageTimezone(callback) {
         message: '无法获取活动标签页',
         currentTimezone: '未知',
         targetTimezone: document.getElementById('timezone-select').value || 'auto'
+      });
+      
+      if (callback) callback({success: false});
+    }
+  });
+}
+
+// 创建刷新页面按钮
+function showRefreshButton() {
+  chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+    if (tabs[0]) {
+      const refreshBtn = document.createElement('button');
+      refreshBtn.textContent = '刷新页面应用更改';
+      refreshBtn.className = 'btn refresh-btn';
+      refreshBtn.style.marginTop = '5px';
+      refreshBtn.style.width = '100%';
+      refreshBtn.style.fontSize = '12px';
+      refreshBtn.style.padding = '5px 10px';
+      refreshBtn.style.backgroundColor = '#4285f4';
+      refreshBtn.style.color = 'white';
+      refreshBtn.style.border = 'none';
+      refreshBtn.style.borderRadius = '4px';
+      refreshBtn.style.cursor = 'pointer';
+      
+      // 移除旧的刷新按钮(如果存在)
+      const oldBtn = document.querySelector('.refresh-btn');
+      if (oldBtn) oldBtn.remove();
+      
+      // 获取时区检测区域并添加按钮
+      const detectionArea = document.getElementById('timezone-detection');
+      detectionArea.appendChild(refreshBtn);
+      
+      // 点击刷新按钮时刷新页面
+      refreshBtn.addEventListener('click', function() {
+        chrome.tabs.reload(tabs[0].id);
+        // 关闭popup
+        window.close();
+      });
+      
+      // 添加一个诊断按钮
+      const diagBtn = document.createElement('button');
+      diagBtn.textContent = '查看诊断信息';
+      diagBtn.className = 'btn diag-btn';
+      diagBtn.style.marginTop = '5px';
+      diagBtn.style.width = '100%';
+      diagBtn.style.fontSize = '12px';
+      diagBtn.style.padding = '5px 10px';
+      diagBtn.style.backgroundColor = '#9e9e9e';
+      diagBtn.style.color = 'white';
+      diagBtn.style.border = 'none';
+      diagBtn.style.borderRadius = '4px';
+      diagBtn.style.cursor = 'pointer';
+      
+      // 移除旧的诊断按钮(如果存在)
+      const oldDiagBtn = document.querySelector('.diag-btn');
+      if (oldDiagBtn) oldDiagBtn.remove();
+      
+      detectionArea.appendChild(diagBtn);
+      
+      // 点击诊断按钮时打开诊断信息
+      diagBtn.addEventListener('click', function() {
+        const diagInfo = document.createElement('div');
+        diagInfo.className = 'diag-info';
+        diagInfo.style.marginTop = '5px';
+        diagInfo.style.padding = '10px';
+        diagInfo.style.backgroundColor = '#f5f5f5';
+        diagInfo.style.border = '1px solid #ddd';
+        diagInfo.style.borderRadius = '4px';
+        diagInfo.style.fontSize = '11px';
+        diagInfo.style.fontFamily = 'monospace';
+        diagInfo.style.whiteSpace = 'pre-wrap';
+        diagInfo.style.overflowWrap = 'break-word';
+        
+        // 移除旧的诊断信息(如果存在)
+        const oldDiagInfo = document.querySelector('.diag-info');
+        if (oldDiagInfo) oldDiagInfo.remove();
+        
+        // 获取manifest信息和浏览器信息
+        chrome.runtime.getManifest(function(manifest) {
+          const info = `浏览器: ${navigator.userAgent}
+插件版本: ${manifest.version}
+URL: ${tabs[0].url}
+Tab ID: ${tabs[0].id}
+时区设置: ${document.getElementById('timezone-select').value}
+时区开关: ${document.getElementById('toggle-timezone').checked ? '开启' : '关闭'}
+时间: ${new Date().toString()}`;
+          
+          diagInfo.textContent = info;
+          detectionArea.appendChild(diagInfo);
+        });
       });
     }
   });
@@ -176,44 +331,61 @@ function initUI() {
   // 时区选择
   timezoneSelect.addEventListener('change', function() {
     const timezone = this.value;
+    console.log('[WebRTC Control] 时区选择变更为:', timezone);
     
-    // 同时发送到后台服务和存储
-    background.send("timezone-set", { timezone });
+    // 步骤1: 立即更新UI以提供反馈
+    document.getElementById('target-timezone').textContent = timezone;
+    document.getElementById('timezone-status-text').textContent = '正在应用...';
+    document.getElementById('timezone-status-text').classList.remove('success', 'failed');
     
-    // 关键修复：将选择的时区直接保存到本地存储
+    // 步骤2: 先保存到本地存储
     chrome.storage.local.set({
       timezone: timezone
     }, function() {
-      console.log('[WebRTC Control] 已保存时区设置到存储:', timezone);
+      console.log('[WebRTC Control] 时区已保存到存储:', timezone);
       
-      // 更新目标时区显示
-      document.getElementById('target-timezone').textContent = timezone;
+      // 步骤3: 发送到后台服务
+      background.send("timezone-set", { timezone });
       
-      // 通知当前标签页刷新时区设置
+      // 步骤4: 向当前标签页发送消息
       chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
         if (tabs[0]) {
-          // 显示正在更新的状态
-          document.getElementById('timezone-status-text').textContent = '正在应用...';
-          document.getElementById('timezone-status-text').classList.remove('success', 'failed');
+          console.log('[WebRTC Control] 向标签页发送时区更新:', tabs[0].id, timezone);
           
-          // 先发送更新消息
           chrome.tabs.sendMessage(tabs[0].id, {
             action: 'updateTimezone',
             timezone: timezone
-          }, function() {
-            // 短暂延迟后检测时区是否已更改
+          }, function(response) {
+            console.log('[WebRTC Control] 收到标签页响应:', response);
+            
+            // 步骤5: 短暂延迟后检测时区是否已更改
             setTimeout(function() {
               detectPageTimezone(function(result) {
-                // 如果检测失败或未更改成功，尝试刷新页面
-                if (!result || !result.success) {
-                  if (confirm("时区更改需要刷新页面才能生效，是否刷新页面？")) {
-                    chrome.tabs.reload(tabs[0].id);
-                    // 关闭popup
-                    window.close();
-                  }
+                // 显示检测结果
+                updateTimezoneStatusUI(result || {
+                  success: false,
+                  message: '检测结果无效',
+                  currentTimezone: '未知',
+                  targetTimezone: timezone
+                });
+                
+                console.log('[WebRTC Control] 时区检测结果:', result);
+                
+                // 如果检测失败或未更改成功，并且不是自动更新的，提示用户刷新页面
+                if ((!result || !result.success) && timezone !== 'auto') {
+                  console.log('[WebRTC Control] 时区变更需要刷新页面');
+                  showRefreshButton();
                 }
               });
-            }, 500);
+            }, 2000); // 增加等待时间以确保脚本有足够时间执行
+          });
+        } else {
+          console.error('[WebRTC Control] 无法获取活动标签页');
+          updateTimezoneStatusUI({
+            success: false,
+            message: '无法获取活动标签页',
+            currentTimezone: '未知',
+            targetTimezone: timezone
           });
         }
       });
