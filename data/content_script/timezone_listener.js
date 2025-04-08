@@ -9,6 +9,16 @@ chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
     // 告知页面刷新时区欺骗设置
     injectRefreshCommand();
     
+    // 强制重新应用时区欺骗脚本
+    reInjectTimezoneSpoof(message.timezone);
+    
+    // 保存到本地存储，以便其他标签页使用
+    chrome.storage.local.set({
+      timezone: message.timezone
+    }, function() {
+      console.log('[WebRTC Control] 已保存时区设置到存储:', message.timezone);
+    });
+    
     // 响应成功消息
     if (sendResponse) {
       sendResponse({success: true});
@@ -39,11 +49,34 @@ function injectTimezoneToPage(timezone) {
 function injectRefreshCommand() {
   const script = document.createElement('script');
   script.textContent = `
-    // 触发chrome.storage.onChanged事件以刷新时区设置
-    document.dispatchEvent(new CustomEvent('webrtc-control-timezone-update'));
+    try {
+      // 触发自定义事件以刷新时区设置
+      document.dispatchEvent(new CustomEvent('webrtc-control-timezone-update'));
+    } catch(e) {
+      console.error("[WebRTC Control] 触发刷新事件失败:", e);
+    }
   `;
   document.documentElement.appendChild(script);
   script.remove();
+}
+
+// 强制重新注入时区欺骗脚本
+function reInjectTimezoneSpoof(timezone) {
+  // 先尝试移除旧脚本
+  const oldScript = document.getElementById("webrtc-control-d");
+  if (oldScript) {
+    oldScript.remove();
+  }
+  
+  // 再注入新脚本
+  const script = document.createElement("script");
+  script.type = "text/javascript";
+  script.setAttribute("id", "webrtc-control-d");
+  script.onload = function () {
+    console.log("[WebRTC Control] 时区欺骗脚本重新加载完成");
+  };
+  script.src = chrome.runtime.getURL("data/content_script/page_context/timezone_spoof.js");
+  document.documentElement.appendChild(script);
 }
 
 // 检测页面实际时区
@@ -63,7 +96,7 @@ function detectPageTimezone(callback) {
         const tzNameMatch = dateString.match(/\\(([^)]+)\\)/);
         
         // 目标时区 (从window变量获取)
-        const targetTimezone = window.__WEBRTC_CONTROL_TIMEZONE__ || "auto";
+        const targetTimezone = window.__WEBRTC_CONTROL_TIMEZONE__ || "America/Los_Angeles";
         
         // 将结果保存到一个临时元素
         const result = {
@@ -84,6 +117,25 @@ function detectPageTimezone(callback) {
         // 检查是否成功修改
         if (currentTimezone === effectiveTarget) {
           success = true;
+        }
+        // 也检查时区名称中是否包含目标时区的一部分（如Pacific、Eastern等）
+        else if (tzNameMatch) {
+          const tzName = tzNameMatch[1].toLowerCase();
+          if (effectiveTarget.includes("los_angeles") && (tzName.includes("pacific") || tzName.includes("pdt") || tzName.includes("pst"))) {
+            success = true;
+          } else if (effectiveTarget.includes("new_york") && (tzName.includes("eastern") || tzName.includes("edt") || tzName.includes("est"))) {
+            success = true;
+          } else if (effectiveTarget.includes("london") && (tzName.includes("british") || tzName.includes("bst") || tzName.includes("gmt"))) {
+            success = true;
+          } else if (effectiveTarget.includes("berlin") && (tzName.includes("central european") || tzName.includes("cet") || tzName.includes("cest"))) {
+            success = true;
+          } else if (effectiveTarget.includes("tokyo") && (tzName.includes("japan") || tzName.includes("jst"))) {
+            success = true;
+          } else if (effectiveTarget.includes("shanghai") && (tzName.includes("china") || tzName.includes("cst"))) {
+            success = true;
+          } else if (effectiveTarget.includes("sydney") && (tzName.includes("austral") || tzName.includes("aest"))) {
+            success = true;
+          }
         }
         
         result.success = success;
@@ -142,22 +194,25 @@ function detectPageTimezone(callback) {
         });
       }
     }
-  }, 300);
+  }, 500); // 增加延迟时间
 }
 
 // 初始化时，从存储中获取当前时区设置并注入
-chrome.storage.local.get(['timezone'], function(result) {
-  if (result.timezone) {
-    console.log('[WebRTC Control] 初始化时区设置:', result.timezone);
-    injectTimezoneToPage(result.timezone);
-  } else {
+chrome.storage.local.get(['timezone', 'timezoneSpoof'], function(result) {
+  // 只有在启用了时区欺骗时才注入时区设置
+  if (result.timezoneSpoof) {
     // 确保默认时区是 America/Los_Angeles
-    console.log('[WebRTC Control] 使用默认时区: America/Los_Angeles');
-    injectTimezoneToPage('America/Los_Angeles');
+    const timezone = result.timezone || "America/Los_Angeles";
+    console.log('[WebRTC Control] 初始化时区设置:', timezone);
     
-    // 保存默认时区到存储
-    chrome.storage.local.set({
-      timezone: 'America/Los_Angeles'
-    });
+    // 向页面注入时区设置
+    injectTimezoneToPage(timezone);
+    
+    // 如果时区未保存，保存默认时区到存储
+    if (!result.timezone) {
+      chrome.storage.local.set({
+        timezone: 'America/Los_Angeles'
+      });
+    }
   }
 }); 

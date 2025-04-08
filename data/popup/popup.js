@@ -192,13 +192,27 @@ function initUI() {
       // 通知当前标签页刷新时区设置
       chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
         if (tabs[0]) {
+          // 显示正在更新的状态
+          document.getElementById('timezone-status-text').textContent = '正在应用...';
+          document.getElementById('timezone-status-text').classList.remove('success', 'failed');
+          
+          // 先发送更新消息
           chrome.tabs.sendMessage(tabs[0].id, {
             action: 'updateTimezone',
             timezone: timezone
           }, function() {
             // 短暂延迟后检测时区是否已更改
             setTimeout(function() {
-              detectPageTimezone();
+              detectPageTimezone(function(result) {
+                // 如果检测失败或未更改成功，尝试刷新页面
+                if (!result || !result.success) {
+                  if (confirm("时区更改需要刷新页面才能生效，是否刷新页面？")) {
+                    chrome.tabs.reload(tabs[0].id);
+                    // 关闭popup
+                    window.close();
+                  }
+                }
+              });
             }, 500);
           });
         }
