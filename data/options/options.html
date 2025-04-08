@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <link rel="stylesheet" href="options.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+  </head>
+  <body>
+    <header class="header">
+      <div class="logo"></div>
+      <h1>WebRTC Control - Advanced Settings</h1>
+    </header>
+    
+    <div class="container">
+      <div class="card">
+        <div class="section">
+          <div class="section-header">
+            <h2>Protection Settings</h2>
+          </div>
+          
+          <div class="option-item">
+            <div class="option-info">
+              <h3>WebRTC IP Handling Policy</h3>
+              <p class="description">This setting controls how your IP addresses are exposed through WebRTC connections</p>
+            </div>
+            <div class="option-control">
+              <select id="method" class="select-control">
+                <option value="default">Off (No Protection)</option>
+                <option value="default_public_and_private_interfaces">Minimal Protection</option>
+                <option value="default_public_interface_only">Medium Protection</option>
+                <option value="disable_non_proxied_udp">Maximum Protection (Default)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        
+        <div class="divider"></div>
+        
+        <div class="section">
+          <div class="section-header">
+            <h2>JavaScript Protection</h2>
+          </div>
+          
+          <div class="option-item">
+            <div class="option-info">
+              <h3>Block WebRTC Support Detection</h3>
+              <p class="description">Blocks "RTCPeerConnection", "MediaStreamTrack" and "RTCSessionDescription"</p>
+            </div>
+            <div class="option-control">
+              <label class="toggle">
+                <input type="checkbox" id="inject">
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+          </div>
+          
+          <div class="option-item">
+            <div class="option-info">
+              <h3>Block Navigator Media Devices</h3>
+              <p class="description">Blocks all video and audio devices from being detected</p>
+            </div>
+            <div class="option-control">
+              <label class="toggle">
+                <input type="checkbox" id="devices">
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+          </div>
+          
+          <div class="option-item">
+            <div class="option-info">
+              <h3>Block Additional WebRTC Objects</h3>
+              <p class="description">Blocks "RTCIceCandidate", "RTCDataChannel" and "RTCConfiguration"</p>
+            </div>
+            <div class="option-control">
+              <label class="toggle">
+                <input type="checkbox" id="additional">
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="card action-card">
+        <div class="section-header">
+          <h2>Tools & Support</h2>
+        </div>
+        
+        <div class="action-buttons">
+          <button id="test" class="btn primary">
+            Test WebRTC Leak
+          </button>
+          <button id="support" class="btn">
+            Support Page
+          </button>
+          <button id="donation" class="btn">
+            Make a Donation
+          </button>
+        </div>
+      </div>
+    </div>
+    
+    <script src="options.js"></script>
+  </body>
+</html>

@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="header">
+    <div class="logo"></div>
+    <h1>WebRTC Control</h1>
+  </div>
+  
+  <div class="status-container">
+    <div class="status-indicator" id="status-indicator"></div>
+    <div class="status-text">Protection: <span id="status-text">ON</span></div>
+    <label class="switch">
+      <input type="checkbox" id="toggle-protection">
+      <span class="slider round"></span>
+    </label>
+  </div>
+
+  <div class="protection-level">
+    <p>Protection Level</p>
+    <select id="protection-level">
+      <option value="disable_non_proxied_udp">Maximum (Default)</option>
+      <option value="default_public_interface_only">Medium</option>
+      <option value="default_public_and_private_interfaces">Minimal</option>
+      <option value="default">Off</option>
+    </select>
+  </div>
+
+  <div class="timezone-spoofing">
+    <p>Timezone Spoofing</p>
+    <div class="timezone-status">
+      <label class="switch">
+        <input type="checkbox" id="toggle-timezone">
+        <span class="slider round"></span>
+      </label>
+      <span>Match timezone to IP location</span>
+    </div>
+    <div class="timezone-selection" id="timezone-container" style="display: none;">
+      <select id="timezone-select">
+        <option value="auto">Auto-detect from IP</option>
+        <option value="America/Los_Angeles">America/Los_Angeles</option>
+        <option value="America/New_York">America/New_York</option>
+        <option value="Europe/London">Europe/London</option>
+        <option value="Europe/Berlin">Europe/Berlin</option>
+        <option value="Asia/Tokyo">Asia/Tokyo</option>
+        <option value="Asia/Shanghai">Asia/Shanghai</option>
+        <option value="Australia/Sydney">Australia/Sydney</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="buttons">
+    <button id="test-button" class="btn">Test Protection</button>
+    <button id="settings-button" class="btn">Advanced Settings</button>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html> 
