@@ -297,6 +297,7 @@ function initUI() {
   const toggleTimezone = document.getElementById('toggle-timezone');
   const timezoneSelect = document.getElementById('timezone-select');
   const checkTimezoneButton = document.getElementById('check-timezone');
+  const detectIPTimezoneButton = document.getElementById('detect-ip-timezone');
   
   // 开关控制
   toggleProtection.addEventListener('change', function() {
@@ -400,6 +401,123 @@ function initUI() {
     
     // 检测时区
     detectPageTimezone();
+  });
+  
+  // IP时区检测按钮
+  detectIPTimezoneButton.addEventListener('click', function() {
+    // 更改状态文本为检测中
+    document.getElementById('timezone-status-text').textContent = 'IP时区检测中...';
+    document.getElementById('timezone-status-text').classList.remove('success', 'failed');
+    
+    // 使用ipgeolocation.io API检测当前IP时区
+    const API_KEY = "cb000dbe5ffc4fe7a792bb3c07d03e1f";
+    const API_URL = `https://api.ipgeolocation.io/timezone?apiKey=${API_KEY}`;
+    
+    fetch(API_URL)
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+        return response.json();
+      })
+      .then(data => {
+        if (data && data.timezone) {
+          console.log('[WebRTC Control] API返回数据:', JSON.stringify(data, null, 2));
+          
+          // 处理特殊地区，比如维吉尼亚州应该使用Eastern Time (America/New_York)
+          let correctTimezone = data.timezone;
+          
+          // 检查是否有地理位置信息
+          if (data.geo) {
+            const country = data.geo.country_code2 || data.geo.country_code;
+            const state = data.geo.state_prov || data.geo.state;
+            const stateCode = data.geo.state_code;
+            
+            console.log("[WebRTC Control] 检测到IP地区:", country, state, stateCode);
+            
+            // 美国维吉尼亚州应使用America/New_York时区
+            if (country === "US" && 
+                (state === "Virginia" || stateCode === "VA" || stateCode === "US-VA")) {
+              if (correctTimezone !== "America/New_York") {
+                console.log("[WebRTC Control] 修正维吉尼亚州的时区: 从", correctTimezone, "改为 America/New_York");
+                correctTimezone = "America/New_York";
+              }
+            }
+          }
+          
+          console.log('[WebRTC Control] IP地址时区检测成功:', correctTimezone);
+          
+          // 更新UI
+          document.getElementById('target-timezone').textContent = correctTimezone;
+          document.getElementById('timezone-status-text').textContent = 'IP时区检测成功，正在应用...';
+          
+          // 更新时区选择器值（如果存在对应选项，否则设为auto）
+          const selectElement = document.getElementById('timezone-select');
+          let optionExists = false;
+          for (let i = 0; i < selectElement.options.length; i++) {
+            if (selectElement.options[i].value === correctTimezone) {
+              selectElement.value = correctTimezone;
+              optionExists = true;
+              break;
+            }
+          }
+          
+          if (!optionExists) {
+            selectElement.value = 'auto';
+          }
+          
+          // 保存到存储并应用
+          chrome.storage.local.set({
+            timezone: correctTimezone
+          }, function() {
+            console.log('[WebRTC Control] IP时区已保存到存储:', correctTimezone);
+            
+            // 发送到后台服务
+            background.send("timezone-set", { timezone: correctTimezone });
+            
+            // 向当前标签页发送消息
+            chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+              if (tabs[0]) {
+                chrome.tabs.sendMessage(tabs[0].id, {
+                  action: 'updateTimezone',
+                  timezone: correctTimezone
+                }, function(response) {
+                  console.log('[WebRTC Control] 收到标签页响应:', response);
+                  
+                  // 短暂延迟后检测时区是否已更改
+                  setTimeout(function() {
+                    detectPageTimezone(function(result) {
+                      updateTimezoneStatusUI(result || {
+                        success: false,
+                        message: '检测结果无效',
+                        currentTimezone: '未知',
+                        targetTimezone: correctTimezone
+                      });
+                    });
+                  }, 2000);
+                });
+              } else {
+                console.error('[WebRTC Control] 无法获取活动标签页');
+                updateTimezoneStatusUI({
+                  success: false,
+                  message: '无法获取活动标签页',
+                  currentTimezone: '未知',
+                  targetTimezone: correctTimezone
+                });
+              }
+            });
+          });
+        } else {
+          console.error('[WebRTC Control] IP时区数据无效:', data);
+          document.getElementById('timezone-status-text').textContent = 'IP时区检测失败';
+          document.getElementById('timezone-status-text').classList.add('failed');
+        }
+      })
+      .catch(error => {
+        console.error('[WebRTC Control] IP时区检测错误:', error);
+        document.getElementById('timezone-status-text').textContent = 'IP时区检测错误';
+        document.getElementById('timezone-status-text').classList.add('failed');
+      });
   });
   
   // 初始化加载时区设置
