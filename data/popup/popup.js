@@ -524,12 +524,19 @@ function initUI() {
   chrome.storage.local.get(['timezone', 'timezoneSpoof'], function(result) {
     if (result.timezoneSpoof !== undefined) {
       toggleTimezone.checked = result.timezoneSpoof;
-      timezoneContainer.style.display = result.timezoneSpoof ? 'block' : 'none';
-      document.getElementById('timezone-detection').style.display = result.timezoneSpoof ? 'block' : 'none';
+    } else {
+      // 首次加载时默认开启
+      toggleTimezone.checked = true;
+      chrome.storage.local.set({ timezoneSpoof: true });
+      background.send("timezone-toggle", { timezoneSpoof: true });
     }
     
-    // 确保默认时区是 America/Los_Angeles
-    let timezone = result.timezone || "America/Los_Angeles";
+    // 更新UI显示
+    timezoneContainer.style.display = toggleTimezone.checked ? 'block' : 'none';
+    document.getElementById('timezone-detection').style.display = toggleTimezone.checked ? 'block' : 'none';
+    
+    // 确保默认时区是 America/Los_Angeles 或 auto
+    let timezone = result.timezone || "auto";
     
     if (timezone) {
       timezoneSelect.value = timezone;
@@ -537,7 +544,7 @@ function initUI() {
     }
     
     // 如果时区欺骗已启用，检测当前页面时区
-    if (result.timezoneSpoof) {
+    if (toggleTimezone.checked) {
       setTimeout(function() {
         detectPageTimezone();
       }, 500);

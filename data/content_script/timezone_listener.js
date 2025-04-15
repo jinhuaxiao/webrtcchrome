@@ -217,10 +217,23 @@ function detectPageTimezone(callback) {
 
 // 初始化时，从存储中获取当前时区设置并注入
 chrome.storage.local.get(['timezone', 'timezoneSpoof'], function(result) {
+  // 如果未设置timezoneSpoof，默认为true
+  const timezoneEnabled = result.timezoneSpoof !== undefined ? result.timezoneSpoof : true;
+  
+  // 首次加载默认设置
+  if (result.timezoneSpoof === undefined) {
+    chrome.storage.local.set({
+      timezoneSpoof: true,
+      timezone: result.timezone || "auto"
+    }, function() {
+      console.log('[WebRTC Control] 已设置默认时区欺骗状态为开启');
+    });
+  }
+  
   // 只有在启用了时区欺骗时才注入时区设置
-  if (result.timezoneSpoof) {
-    // 确保默认时区是 America/Los_Angeles
-    const timezone = result.timezone || "America/Los_Angeles";
+  if (timezoneEnabled) {
+    // 确保默认时区是 auto 或已设置的值
+    const timezone = result.timezone || "auto";
     console.log('[WebRTC Control] 初始化时区设置:', timezone);
     
     // 向页面注入时区设置
@@ -235,7 +248,7 @@ chrome.storage.local.get(['timezone', 'timezoneSpoof'], function(result) {
     // 如果时区未保存，保存默认时区到存储
     if (!result.timezone) {
       chrome.storage.local.set({
-        timezone: 'America/Los_Angeles'
+        timezone: 'auto'
       });
     }
     

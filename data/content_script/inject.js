@@ -132,9 +132,22 @@ function loadAndApplyTimezoneSettings() {
   chrome.storage.local.get(['timezone', 'timezoneSpoof'], function(result) {
     console.log('[WebRTC Control] (Inject) 从存储读取结果:', result);
     
-    if (result.timezoneSpoof) {
-      const timezone = result.timezone || "America/Los_Angeles"; // 确保有默认值
+    // 如果未设置timezoneSpoof，则默认设置为true
+    const timezoneEnabled = result.timezoneSpoof !== undefined ? result.timezoneSpoof : true;
+    
+    if (timezoneEnabled) {
+      const timezone = result.timezone || "auto"; // 确保有默认值
       console.log('[WebRTC Control] (Inject) 时区欺骗已启用，应用时区:', timezone);
+      
+      // 如果之前未设置，则设置默认值
+      if (result.timezoneSpoof === undefined) {
+        chrome.storage.local.set({
+          timezoneSpoof: true,
+          timezone: "auto"
+        }, function() {
+          console.log('[WebRTC Control] (Inject) 已设置默认时区配置');
+        });
+      }
       
       // *** 关键步骤: 先注入全局变量 ***
       const tzScript = document.createElement("script");
